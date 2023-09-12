@@ -1,0 +1,137 @@
+version: '3.8'
+services:
+
+  traefik:
+    image: traefik:v2.1
+    container_name: traefik
+    networks:
+      - backend
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/traefik.toml:/etc/traefik/traefik.toml:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=admin:$$apr1$$EdX8M5yY$$eempZrMtHiqAm56VpcXAP0"
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    networks:
+      - backend
+    ports:
+      - "8025:8025"
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.http.routers.mailhog.rule=PathPrefix(`/mailhog`)"
+#      - "traefik.http.routers.mailhog.middlewares=mailhog-stripprefix"
+#      - "traefik.http.middlewares.mailhog-stripprefix.stripprefix.prefixes=/mailhog"
+#      - "traefik.http.services.mailhog.loadbalancer.server.port=8025"
+
+
+  notification-service:
+    image: docker.io/ggrigorov1/ecart-notification-service:local-georgi
+    container_name: notification-service
+    restart: always
+    depends_on:
+      - ecart-mailhog
+    networks:
+      - backend
+    environment:
+      - SPRING_MAIL_HOST=ecart-mailhog
+      - SPRING_MAIL_PORT=1025
+
+  order-service-posgresql:
+    image: postgres:14.1
+    container_name: order-service-posgresql
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ecart-os:/data/lib
+    environment:
+      - POSTGRES_DB=eOrderServiceDB
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=toor
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - '5433:5432'
+
+  order-service:
+#    image: docker.io/ggrigorov1/ecart-notification-service:local-georgi
+    image: ${REGISTRY_HOST}/${REGISTRY_REPO}/ecart-notification-service:local-georgi
+    container_name: order-service
+    restart: always
+    depends_on:
+      - order-service-posgresql
+    networks:
+      - backend
+    environment:
+      - SPRING_DATASOURCE_URL=${OS_DATABASE_URL}
+      - SPRING_DATASOURCE_USERNAME=${OS_DATABASE_USER}
+      - SPRING_DATASOURCE_PASSWORD=${OS_DATABASE_PASS}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.marketing-automation-api.rule=PathPrefix(`/mat-service`)"
+      - "traefik.http.routers.marketing-automation-api.middlewares=marketing-automation-api-stripprefix"
+      - "traefik.http.middlewares.marketing-automation-api-stripprefix.stripprefix.prefixes=/mat-service"
+      - "traefik.http.services.marketing-automation-api-service.loadbalancer.server.port=8080"
+
+  e-ps-posgresql:
+    image: postgres:14.1
+    container_name: e-ps-posgresql
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ecart-ps:/data/lib
+    environment:
+      - POSTGRES_DB=eProductServiceDB
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=toor
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - '5434:5432'
+
+  e-rrs-posgresql:
+    image: postgres:14.1
+    container_name: e-rrs-posgresql
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ecart-rrs:/data/lib
+    environment:
+      - POSTGRES_DB=eRevRateServiceDB
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=toor
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - '5435:5432'
+
+  e-rabbitmq:
+    image: rabbitmq:3.12.0-management
+    container_name: e-rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    networks:
+      - backend
+    volumes:
+      - ecart-rabbit:/var/lib/rabbitmq/
+      - ecart-rabbit:/var/log/rabbitmq
+
+networks:
+  backend:
+
+volumes:
+  ecart-os:
+  ecart-ps:
+  ecart-rrs:
+  ecart-rabbit:
+

@@ -1,0 +1,35 @@
+spring:
+  mail:
+    host: 127.0.0.1
+    port: 1025
+    username:
+    password:
+    smtp:
+      auth: true
+    properties:
+      mail:
+        smtp:
+          starttls:
+            enable: true
+
+logging:
+  level:
+    ROOT: INFO
+    com.midnightsun: DEBUG
+
+server:
+  port: 8083
+
+rabbitmq:
+  queues:
+    ns_queue: notification-queue
+  exchanges:
+    ns_exchange: notification-exchange
+  routings:
+    ns_key: notification-routing-key
+
+info:
+  application:
+    name: Notification Service
+    version: 0.0.1
+    description: Service responsible for notification in eCart Application
